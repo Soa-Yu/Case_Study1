@@ -2,9 +2,10 @@
 title: "Case study 1: How Does a Bike-Share Navigate Speedy Success"
 author: "Soa-Yu Chan"
 date: "2021/6/19"
-output: 
-  html_document: 
-    df_print: paged
+output: pdf_document
+#output: 
+#  html_document: 
+#    df_print: paged
 ---
 
 ```{r setup, include=FALSE}
