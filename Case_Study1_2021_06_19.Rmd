@@ -1,0 +1,221 @@
+---
+title: "Case study 1: How Does a Bike-Share Navigate Speedy Success"
+author: "Soa-Yu Chan"
+date: "2021/6/19"
+output: 
+  html_document: 
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Goal: How do annual members and casual riders use Cyclistic bikes differently?
+  
+  
+### Contents of Document
+
+1. Data Source
+2. Data Structure and manipulate
+3. Data visualizations
+4. Preliminary results
+  
+  
+### 1. Data Source
+
+This is a public data came from [**Google Data Analytics**](https://www.coursera.org/professional-certificates/google-data-analytics) course in coursera.  Cyclistic is a fictional bike-share company located in Chicago with more than 5,800 bicycles and 600 docking stations. The data has been made available by Motivate
+International Inc. under this [**license**](https://www.divvybikes.com/data-license-agreement). This case study hope to find the difference between annual members and casual riders.
+  
+  
+### 2. Data Structure and Manipulate
+
+* `X.U.FEFF.`: Index  
+* `ride_id`: ID attached to each trip taken  
+* `rideable_type`: rideable type  
+* `start_at`: day and time trip started, in CST  
+* `ended_at`: day and time trip ended, in CST  
+* `start_station_name`: name of station where trip originated  
+* `start_station_id`: ID of station where trip originated  
+* `end_station_name`: name of station where trip terminated  
+* `end_station_id`: ID of station where trip terminated  
+* `start_lat`: station latitude where trip originated  
+* `start_lng`: station longitude where trip originated  
+* `end_lat`: station latitude where trip terminated  
+* `end_lng`: station longitude where trip terminated  
+* `member_casual`: "casual" is a rider who purchased single-ride passes or full-day passes; "member" is a rider who purchased an Annual Membership  
+* `ride_length_second`: each ride time from trip originated to trip terminated, in second  
+* `ride_length`: each ride time from start to end, in hh:mm:ss
+* `day_of_week`: the day of the week that each ride started  
+
+From **2020-04** to **2021-05**. 
+
+```{r import, echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+library(table1)
+library(tidyverse)
+library(ggplot2)
+library(lubridate)
+library(scales)
+
+bike_share <- read.csv(file = "D:/case_study_2021_06_13/202004_202105_divvy_tripdata.csv",
+               header = T, na.strings = c("", "NA"), encoding = "UTF-8", sep = ",")
+glimpse(bike_share)
+```
+***  
+* Add `ride_length_hour`: ride length, in hour
+* Add `started_date`: started date, in yyyy-mm-dd  
+* Add `start_mm_yyyy`: started year-month, in yyyy-mm  
+
+```{r mutate, message=FALSE, warning=FALSE, paged.print=TRUE}
+bike_share$ride_length_hour <- ((bike_share$ride_length_second + 0.001)/3600) - (0.001 / 3600)
+bike_share$started_date <- as_date(ymd_hms(bike_share$started_at))
+bike_share$start_mm_yyyy <- format_ISO8601(bike_share$started_date, precision = "ym")
+```
+***  
+* Some trip characteristic between casual riders and annual members
+
+```{r summary, echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+table1(~ factor(day_of_week) + ride_length_hour + factor(rideable_type) + start_mm_yyyy | factor(member_casual), data = bike_share)
+```
+***  
+* Casual Riders Top 10 Trip  
+
+```{r table1, echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+bike_share %>% 
+  group_by(start_station_name, end_station_name) %>%
+  filter(member_casual == 'casual') %>% 
+  drop_na() %>% 
+  summarize(count_start_end = n(), average_rider_length = mean(ride_length_hour) * 60) %>% 
+  arrange(desc(count_start_end)) %>% 
+  `colnames<-`(c("Start station name", "End station name", "Count", "Average minutes per ride")) %>% 
+  head(n=10)
+```
+  
+* Annual Members Top 10 Trip  
+
+```{r table2, echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+bike_share %>% 
+  group_by(start_station_name, end_station_name) %>%
+  filter(member_casual == 'member') %>% 
+  drop_na() %>% 
+  summarize(count_start_end = n(), average_rider_length = mean(ride_length_hour)*60) %>% 
+  arrange(desc(count_start_end)) %>% 
+  `colnames<-`(c("Start station name", "End station name", "Count", "Average minutes per ride")) %>% 
+  head(n=10)
+```
+  
+  
+  
+### 3. Data Visualizations (Bar Chart - Annual Member vs. Casual rider)
+  
+  
+##### Visualization on Month Year  
+* Casual rider has less trip during winter season compare to annual member(Fig.1).  
+* Annual member spend less time than casual rider for each trip(Fig.2).  
+```{r plt1, echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+ggplot(data = bike_share)+
+  geom_bar( position = 'dodge', mapping = aes(x = factor(start_mm_yyyy), fill = member_casual)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) + 
+  labs(title = 'Fig.1: Total number of trips according to Month',
+       x = 'Year-Month', y = 'Number of trips', fill='Rider Type') +
+  scale_y_continuous(breaks = c(0,100000,200000,300000,400000),
+                     labels = c("0","100K","200K","300K","400K")) + 
+  theme(legend.position = c(.95, .97),
+        legend.justification = c("right", "top"),
+        legend.box.just = "right",
+        legend.margin = margin(2, 10, 2, 6))
+
+t2 <- bike_share %>% 
+  group_by(start_mm_yyyy, member_casual) %>% 
+  summarize(average_ride_length = mean(ride_length_hour*60), sum_ride_length = sum(ride_length_hour)) 
+
+ggplot(t2, aes(x = start_mm_yyyy, y = average_ride_length,  fill = member_casual)) +
+  geom_bar(stat = "identity", position = position_dodge(), width =  0.5) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) + 
+  labs(title = 'Fig.2: Average Minutes per Trip by Year-Month',
+       x = 'Year-Month', y = 'Average minutes per trip', fill = 'Rider Type') +
+  theme(legend.position = c(.95, .97),
+        legend.justification = c("right", "top"),
+        legend.box.just = "right",
+        legend.margin = margin(2, 10, 2, 6))
+
+```
+  
+***  
+  
+##### Visualization on Day of Week  
+* Much more trip during weekend for casual riders(Fig.3).  
+* No significant difference from sunday to saturday for annual members(Fig.3).  
+* Also, casual rider spend more time than annual member for each trip(Fig.4).  
+  
+```{r plt2, echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+ggplot(data = bike_share) +
+  geom_bar(mapping = aes(x = factor(day_of_week), fill = member_casual)) +
+  facet_wrap(~member_casual) +
+  labs(title = 'Fig.3: Total number of trips according to The Day of Week',
+   x = 'The Day of Week', y = 'Number of trips', fill = 'Rider Type') +
+  scale_x_discrete(breaks = 1:7,
+                   labels = c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")) +
+  scale_y_continuous(breaks = c(0, 100000, 200000, 300000, 400000),
+                   labels = c("0", "100K", "200K", "300K", "400K")) + 
+  theme(legend.position = 'none')
+
+t3 <- bike_share %>% 
+  group_by(day_of_week, member_casual) %>% 
+  summarize(average_ride_length = mean(ride_length_hour*60), sum_ride_length = sum(ride_length_hour)) 
+
+ggplot(t3, aes(x = factor(day_of_week), y = average_ride_length, fill = member_casual)) +
+  geom_bar(stat = "identity", position = position_dodge(), width = 0.5) +
+  facet_wrap(~member_casual) +
+  labs(title = 'Fig.4: Average Minutes per Trip by The Day of Week',
+       x = 'The Day of Week', y = 'Average minutes per trip', fill = 'Rider Type') +
+  scale_x_discrete(breaks = 1:7,
+                   labels = c("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")) +
+  theme(legend.position = 'none')
+
+```
+  
+  
+***  
+  
+##### Visualization on Rideable Type  
+* For annual members: No docked_bike trip after 2021-01. Only classic_bike and electric_bike(Fig.5).  
+* For casual members: Total number of Classic_bike trip portion larger than docked_bike trip since 2020-12(Fig.5).  
+* docked_bike spend more average time than classic_bike per trip(Fig.6).  
+```{r plt5, echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+t5 <- bike_share %>% 
+  group_by(start_mm_yyyy, member_casual, rideable_type) %>% 
+  summarize(average_ride_length = mean(ride_length_hour * 60), sum_ride_length = sum(ride_length_hour), sum_trip = n()) 
+
+ggplot(t5, aes(x = start_mm_yyyy, y = sum_trip,  fill = rideable_type)) +
+  geom_bar(stat = "identity", position = position_dodge(), width =  0.5) +
+  facet_wrap(~member_casual) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) + 
+  labs(title = 'Fig.5: Total Number of Trips by Year-Month for different Rideable Type',
+       x = 'Year-Month', y = 'Total number of trips', fill = 'Rideable Type') +
+  scale_y_continuous(breaks = c(0, 100000, 200000, 300000, 400000),
+                     labels = c("0", "100K", "200K", "300K", "400K")) +
+  theme(legend.position = c(.95, .97),
+        legend.justification = c("right", "top"),
+        legend.box.just = "right",
+        legend.margin = margin(2, 10, 2, 6))
+
+ggplot(t5, aes(x = start_mm_yyyy, y = average_ride_length,  fill = rideable_type)) +
+  geom_bar(stat = "identity", position = position_dodge(), width = 0.5) +
+  facet_wrap(~member_casual) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) + 
+  labs(title = 'Fig.6: Average Ride Minutes per Trip by Year-Month for different Rideable Type',
+       x = 'Year-Month', y = 'Average ride minutes per trip', fill = 'Rideable Type') +
+  theme(legend.position = c(.95, .97),
+        legend.justification = c("right", "top"),
+        legend.box.just = "right",
+        legend.margin = margin(2, 10, 2, 6))
+```
+  
+***  
+  
+### 4. Preliminary results  
+* Change all docked_bike to classic_bike. It can save time for riders.  
+* Add a half-year annual member to pricing plans. Because many casual riders not use in winter.  
+* Set more docking station near office zone. Annual member use Cyclistic to commute to
+work each day.  
